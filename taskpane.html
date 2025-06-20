@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JSON Export/Import</title>
+    
+    <!-- Office JavaScript API -->
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    
+    <!-- Fabric UI CSS -->
+    <link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f2f1;
+        }
+        
+        .container {
+            max-width: 100%;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1.6px 3.6px 0 rgba(0,0,0,0.132), 0 0.3px 0.9px 0 rgba(0,0,0,0.108);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #323130;
+        }
+        
+        .button {
+            background-color: #0078d4;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 2px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        
+        .button:hover {
+            background-color: #106ebe;
+        }
+        
+        .button:disabled {
+            background-color: #a19f9d;
+            cursor: not-allowed;
+        }
+        
+        .textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #d2d0ce;
+            border-radius: 2px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        
+        .file-input {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #d2d0ce;
+            border-radius: 2px;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 2px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #dff6dd;
+            border: 1px solid #0e700e;
+            color: #0e700e;
+        }
+        
+        .status.error {
+            background-color: #fed9cc;
+            border: 1px solid #d13438;
+            color: #d13438;
+        }
+        
+        .sheet-selector {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #d2d0ce;
+            border-radius: 2px;
+        }
+        
+        .description {
+            font-size: 12px;
+            color: #605e5c;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="section">
+            <div class="section-title">📤 Exporter vers JSON</div>
+            <div class="description">Exporte la première feuille du classeur au format JSON</div>
+            <button class="button" id="exportBtn">Exporter la première feuille</button>
+            <textarea class="textarea" id="exportResult" placeholder="Le JSON exporté apparaîtra ici..." readonly></textarea>
+            <button class="button" id="downloadBtn" style="display: none;">Télécharger le fichier JSON</button>
+        </div>
+
+        <div class="section">
+            <div class="section-title">📥 Importer depuis JSON</div>
+            <div class="description">Importe des données JSON dans une feuille (crée une révision si la feuille n'est pas vide)</div>
+            
+            <label for="sheetSelector">Feuille de destination :</label>
+            <select class="sheet-selector" id="sheetSelector">
+                <option value="">Sélectionner une feuille...</option>
+            </select>
+            
+            <input type="file" class="file-input" id="fileInput" accept=".json" />
+            <textarea class="textarea" id="importData" placeholder="Ou collez votre JSON ici..."></textarea>
+            <button class="button" id="importBtn">Importer les données</button>
+        </div>
+
+        <div class="status" id="statusMessage"></div>
+    </div>
+
+    <script>
+        Office.onReady((info) => {
+            if (info.host === Office.HostType.Excel) {
+                document.getElementById('exportBtn').onclick = exportToJSON;
+                document.getElementById('importBtn').onclick = importFromJSON;
+                document.getElementById('downloadBtn').onclick = downloadJSON;
+                document.getElementById('fileInput').onchange = handleFileSelect;
+                
+                loadWorksheets();
+            }
+        });
+
+        let exportedData = null;
+
+        function showStatus(message, isError = false) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + (isError ? 'error' : 'success');
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        async function loadWorksheets() {
+            try {
+                await Excel.run(async (context) => {
+                    const worksheets = context.workbook.worksheets;
+                    worksheets.load("items/name");
+                    
+                    await context.sync();
+                    
+                    const selector = document.getElementById('sheetSelector');
+                    selector.innerHTML = '<option value="">Sélectionner une feuille...</option>';
+                    
+                    worksheets.items.forEach(worksheet => {
+                        const option = document.createElement('option');
+                        option.value = worksheet.name;
+                        option.textContent = worksheet.name;
+                        selector.appendChild(option);
+                    });
+                });
+            } catch (error) {
+                showStatus('Erreur lors du chargement des feuilles: ' + error.message, true);
+            }
+        }
+
+        async function exportToJSON() {
+            try {
+                document.getElementById('exportBtn').disabled = true;
+                
+                await Excel.run(async (context) => {
+                    // Obtenir la première feuille
+                    const worksheets = context.workbook.worksheets;
+                    worksheets.load("items");
+                    await context.sync();
+                    
+                    if (worksheets.items.length === 0) {
+                        throw new Error('Aucune feuille trouvée dans le classeur');
+                    }
+                    
+                    const firstWorksheet = worksheets.items[0];
+                    const range = firstWorksheet.getUsedRange();
+                    range.load("values");
+                    
+                    await context.sync();
+                    
+                    if (!range.values || range.values.length === 0) {
+                        throw new Error('La première feuille est vide');
+                    }
+                    
+                    // Convertir les données en JSON
+                    const data = range.values;
+                    const headers = data[0];
+                    const rows = data.slice(1);
+                    
+                    const jsonData = rows.map(row => {
+                        const obj = {};
+                        headers.forEach((header, index) => {
+                            obj[header] = row[index];
+                        });
+                        return obj;
+                    });
+                    
+                    exportedData = jsonData;
+                    document.getElementById('exportResult').value = JSON.stringify(jsonData, null, 2);
+                    document.getElementById('downloadBtn').style.display = 'inline-block';
+                    
+                    showStatus('Export réussi! ' + jsonData.length + ' lignes exportées.');
+                });
+            } catch (error) {
+                showStatus('Erreur lors de l\'export: ' + error.message, true);
+            } finally {
+                document.getElementById('exportBtn').disabled = false;
+            }
+        }
+
+        function downloadJSON() {
+            if (!exportedData) return;
+            
+            const dataStr = JSON.stringify(exportedData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = 'excel_export.json';
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type === "application/json") {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('importData').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        async function importFromJSON() {
+            try {
+                const selectedSheet = document.getElementById('sheetSelector').value;
+                const jsonText = document.getElementById('importData').value.trim();
+                
+                if (!selectedSheet) {
+                    throw new Error('Veuillez sélectionner une feuille de destination');
+                }
+                
+                if (!jsonText) {
+                    throw new Error('Veuillez fournir des données JSON');
+                }
+                
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(jsonText);
+                } catch (e) {
+                    throw new Error('JSON invalide: ' + e.message);
+                }
+                
+                if (!Array.isArray(jsonData) || jsonData.length === 0) {
+                    throw new Error('Le JSON doit être un tableau non vide d\'objets');
+                }
+                
+                document.getElementById('importBtn').disabled = true;
+                
+                await Excel.run(async (context) => {
+                    const worksheet = context.workbook.worksheets.getItem(selectedSheet);
+                    
+                    // Vérifier si la feuille n'est pas vide
+                    const usedRange = worksheet.getUsedRange(true);
+                    if (usedRange) {
+                        // La feuille n'est pas vide, créer une révision
+                        context.workbook.application.suspendApiCalculationUntilNextSync();
+                        worksheet.enableCalculation = false;
+                        
+                        // Activer le suivi des révisions
+                        const protection = worksheet.protection;
+                        protection.load("protected");
+                        await context.sync();
+                        
+                        if (!protection.protected) {
+                            // Effacer le contenu existant
+                            usedRange.clear();
+                        }
+                    }
+                    
+                    // Préparer les données pour l'insertion
+                    const headers = Object.keys(jsonData[0]);
+                    const dataToInsert = [headers];
+                    
+                    jsonData.forEach(item => {
+                        const row = headers.map(header => item[header] || '');
+                        dataToInsert.push(row);
+                    });
+                    
+                    // Insérer les données
+                    const range = worksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}${dataToInsert.length}`);
+                    range.values = dataToInsert;
+                    
+                    // Formater les en-têtes
+                    const headerRange = worksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
+                    headerRange.format.font.bold = true;
+                    headerRange.format.fill.color = "#4472C4";
+                    headerRange.format.font.color = "white";
+                    
+                    // Auto-ajuster les colonnes
+                    range.format.autofitColumns();
+                    
+                    await context.sync();
+                    
+                    showStatus(`Import réussi! ${jsonData.length} lignes importées dans la feuille "${selectedSheet}".`);
+                });
+                
+            } catch (error) {
+                showStatus('Erreur lors de l\'import: ' + error.message, true);
+            } finally {
+                document.getElementById('importBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
