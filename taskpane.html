@@ -103,14 +103,6 @@
             color: #d13438;
         }
         
-        .sheet-selector {
-            width: 100%;
-            padding: 8px;
-            margin: 10px 0;
-            border: 1px solid #d2d0ce;
-            border-radius: 2px;
-        }
-        
         .description {
             font-size: 12px;
             color: #605e5c;
@@ -123,7 +115,7 @@
     <div class="container">
         <div class="section">
             <div class="section-title">📤 Exporter vers JSON</div>
-            <div class="description">Converti le tableau au format JSON</div>
+            <div class="description">Exporte la première feuille du classeur au format JSON</div>
             <button class="button" id="exportBtn">Convertir le tableau</button>
             <textarea class="textarea" id="exportResult" placeholder="Le JSON à exporter apparaîtra ici..." readonly></textarea>
             <button class="button" id="downloadBtn" style="display: none;">Télécharger le fichier JSON</button>
@@ -191,235 +183,6 @@
             setTimeout(() => {
                 statusEl.style.display = 'none';
             }, 5000);
-        }
-
-        async function loadWorksheets() {
-            // Cette fonction n'est plus nécessaire car nous utilisons la feuille active
-        }
-
-        async function analyzeChanges() {
-            try {
-                const jsonText = document.getElementById('importData').value.trim();
-                
-                if (!jsonText) {
-                    throw new Error('Veuillez fournir des données JSON');
-                }
-                
-                let jsonData;
-                try {
-                    jsonData = JSON.parse(jsonText);
-                } catch (e) {
-                    throw new Error('JSON invalide: ' + e.message);
-                }
-                
-                if (!Array.isArray(jsonData) || jsonData.length === 0) {
-                    throw new Error('Le JSON doit être un tableau non vide d\'objets');
-                }
-                
-                document.getElementById('importBtn').disabled = true;
-                
-                await Excel.run(async (context) => {
-                    // Obtenir la feuille active
-                    const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
-                    activeWorksheet.load("name");
-                    
-                    // Obtenir les données actuelles
-                    const usedRange = activeWorksheet.getUsedRange(true);
-                    let currentData = [];
-                    
-                    if (usedRange) {
-                        usedRange.load("values");
-                        await context.sync();
-                        currentData = usedRange.values;
-                    } else {
-                        await context.sync();
-                    }
-                    
-                    // Stocker les données pour l'import
-                    pendingImportData = jsonData;
-                    currentWorksheetData = currentData;
-                    
-                    // Analyser les changements
-                    const changes = compareData(currentData, jsonData);
-                    
-                    // Afficher le modal avec les changements
-                    showChangeModal(changes, activeWorksheet.name);
-                });
-                
-            } catch (error) {
-                showStatus('Erreur lors de l\'analyse: ' + error.message, true);
-            } finally {
-                document.getElementById('importBtn').disabled = false;
-            }
-        }
-
-        function compareData(currentData, newJsonData) {
-            const changes = {
-                newCells: 0,
-                deletedCells: 0,
-                modifiedCells: 0,
-                details: []
-            };
-            
-            // Préparer les nouvelles données pour la comparaison
-            const headers = newJsonData.length > 0 ? Object.keys(newJsonData[0]) : [];
-            const newDataFormatted = [headers];
-            
-            newJsonData.forEach(item => {
-                const row = headers.map(header => item[header] || '');
-                newDataFormatted.push(row);
-            });
-            
-            // Comparer les dimensions
-            const currentRows = currentData.length;
-            const currentCols = currentData.length > 0 ? currentData[0].length : 0;
-            const newRows = newDataFormatted.length;
-            const newCols = headers.length;
-            
-            // Analyser les changements cellule par cellule
-            const maxRows = Math.max(currentRows, newRows);
-            const maxCols = Math.max(currentCols, newCols);
-            
-            for (let row = 0; row < maxRows; row++) {
-                for (let col = 0; col < maxCols; col++) {
-                    const currentValue = (currentData[row] && currentData[row][col]) || '';
-                    const newValue = (newDataFormatted[row] && newDataFormatted[row][col]) || '';
-                    
-                    const currentEmpty = currentValue === null || currentValue === undefined || currentValue === '';
-                    const newEmpty = newValue === null || newValue === undefined || newValue === '';
-                    
-                    if (currentEmpty && !newEmpty) {
-                        changes.newCells++;
-                        changes.details.push({
-                            type: 'new',
-                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            value: newValue
-                        });
-                    } else if (!currentEmpty && newEmpty) {
-                        changes.deletedCells++;
-                        changes.details.push({
-                            type: 'deleted',
-                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            oldValue: currentValue
-                        });
-                    } else if (!currentEmpty && !newEmpty && currentValue !== newValue) {
-                        changes.modifiedCells++;
-                        changes.details.push({
-                            type: 'modified',
-                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            oldValue: currentValue,
-                            newValue: newValue
-                        });
-                    }
-                }
-            }
-            
-            return changes;
-        }
-
-        function showChangeModal(changes, worksheetName) {
-            const modal = document.getElementById('changeModal');
-            const statsDiv = document.getElementById('changeStats');
-            const detailsDiv = document.getElementById('changeDetails');
-            
-            // Afficher les statistiques
-            statsDiv.innerHTML = `
-                <h4 style="margin: 0 0 10px 0;">Feuille: ${worksheetName}</h4>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    <div style="color: #107c10;"><strong>${changes.newCells}</strong> nouvelles cellules</div>
-                    <div style="color: #d13438;"><strong>${changes.deletedCells}</strong> cellules supprimées</div>
-                    <div style="color: #ff8c00;"><strong>${changes.modifiedCells}</strong> cellules modifiées</div>
-                </div>
-            `;
-            
-            // Afficher les détails (limité aux 50 premiers changements)
-            const limitedDetails = changes.details.slice(0, 50);
-            detailsDiv.innerHTML = limitedDetails.map(change => {
-                switch (change.type) {
-                    case 'new':
-                        return `<div style="padding: 5px; border-left: 3px solid #107c10; margin: 5px 0; background: #f6ffed;">
-                            <strong>${change.cell}</strong>: Nouvelle valeur "<em>${change.value}</em>"
-                        </div>`;
-                    case 'deleted':
-                        return `<div style="padding: 5px; border-left: 3px solid #d13438; margin: 5px 0; background: #fff2f0;">
-                            <strong>${change.cell}</strong>: Valeur supprimée "<em>${change.oldValue}</em>"
-                        </div>`;
-                    case 'modified':
-                        return `<div style="padding: 5px; border-left: 3px solid #ff8c00; margin: 5px 0; background: #fff7e6;">
-                            <strong>${change.cell}</strong>: "<em>${change.oldValue}</em>" → "<em>${change.newValue}</em>"
-                        </div>`;
-                    default:
-                        return '';
-                }
-            }).join('');
-            
-            if (changes.details.length > 50) {
-                detailsDiv.innerHTML += `<div style="text-align: center; padding: 10px; color: #605e5c; font-style: italic;">
-                    ... et ${changes.details.length - 50} autres changements
-                </div>`;
-            }
-            
-            if (changes.details.length === 0) {
-                detailsDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #605e5c;">Aucun changement détecté</div>';
-            }
-            
-            modal.style.display = 'block';
-        }
-
-        function closeChangeModal() {
-            document.getElementById('changeModal').style.display = 'none';
-            pendingImportData = null;
-            currentWorksheetData = null;
-        }
-
-        async function confirmImport() {
-            if (!pendingImportData) {
-                showStatus('Aucune donnée à importer', true);
-                return;
-            }
-            
-            try {
-                await Excel.run(async (context) => {
-                    const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
-                    
-                    // Vérifier si la feuille n'est pas vide pour créer une révision
-                    const usedRange = activeWorksheet.getUsedRange(true);
-                    if (usedRange) {
-                        // La feuille n'est pas vide, effacer le contenu existant
-                        usedRange.clear();
-                    }
-                    
-                    // Préparer les données pour l'insertion
-                    const headers = Object.keys(pendingImportData[0]);
-                    const dataToInsert = [headers];
-                    
-                    pendingImportData.forEach(item => {
-                        const row = headers.map(header => item[header] || '');
-                        dataToInsert.push(row);
-                    });
-                    
-                    // Insérer les données
-                    const range = activeWorksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}${dataToInsert.length}`);
-                    range.values = dataToInsert;
-                    
-                    // Formater les en-têtes
-                    const headerRange = activeWorksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
-                    headerRange.format.font.bold = true;
-                    headerRange.format.fill.color = "#4472C4";
-                    headerRange.format.font.color = "white";
-                    
-                    // Auto-ajuster les colonnes
-                    range.format.autofitColumns();
-                    
-                    await context.sync();
-                    
-                    closeChangeModal();
-                    showStatus(`Import réussi! ${pendingImportData.length} lignes importées dans la feuille active.`);
-                });
-                
-            } catch (error) {
-                showStatus('Erreur lors de l\'import: ' + error.message, true);
-            }
         }
 
         async function exportToJSON() {
@@ -520,10 +283,279 @@
                 };
                 reader.readAsText(file);
             }
+            
+            // Réinitialiser l'input file pour permettre de sélectionner le même fichier
+            event.target.value = '';
         }
 
-        async function importFromJSON() {
-            // Cette fonction est remplacée par analyzeChanges et confirmImport
+        async function analyzeChanges() {
+            try {
+                const jsonText = document.getElementById('importData').value.trim();
+                
+                if (!jsonText) {
+                    throw new Error('Veuillez fournir des données JSON');
+                }
+                
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(jsonText);
+                } catch (e) {
+                    throw new Error('JSON invalide: ' + e.message);
+                }
+                
+                if (!Array.isArray(jsonData)) {
+                    throw new Error('Le JSON doit être un tableau d\'objets');
+                }
+                
+                if (jsonData.length === 0) {
+                    throw new Error('Le tableau JSON ne peut pas être vide');
+                }
+                
+                // Vérifier que les éléments du tableau sont des objets
+                if (typeof jsonData[0] !== 'object' || jsonData[0] === null) {
+                    throw new Error('Le JSON doit contenir des objets valides');
+                }
+                
+                document.getElementById('importBtn').disabled = true;
+                
+                await Excel.run(async (context) => {
+                    // Obtenir la feuille active
+                    const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
+                    activeWorksheet.load("name");
+                    
+                    // Obtenir les données actuelles
+                    const usedRange = activeWorksheet.getUsedRange(true);
+                    let currentData = [];
+                    
+                    if (usedRange) {
+                        usedRange.load("values");
+                        await context.sync();
+                        
+                        // Vérifier que les valeurs existent
+                        if (usedRange.values && usedRange.values.length > 0) {
+                            currentData = usedRange.values;
+                        }
+                    } else {
+                        await context.sync();
+                    }
+                    
+                    // Stocker les données pour l'import
+                    pendingImportData = jsonData;
+                    currentWorksheetData = currentData;
+                    
+                    // Analyser les changements
+                    const changes = compareData(currentData, jsonData);
+                    
+                    // Afficher le modal avec les changements
+                    showChangeModal(changes, activeWorksheet.name);
+                });
+                
+            } catch (error) {
+                showStatus('Erreur lors de l\'analyse: ' + error.message, true);
+            } finally {
+                document.getElementById('importBtn').disabled = false;
+            }
+        }
+
+        function compareData(currentData, newJsonData) {
+            const changes = {
+                newCells: 0,
+                deletedCells: 0,
+                modifiedCells: 0,
+                details: []
+            };
+            
+            // Vérification de sécurité pour newJsonData
+            if (!newJsonData || !Array.isArray(newJsonData) || newJsonData.length === 0) {
+                return changes;
+            }
+            
+            // Préparer les nouvelles données pour la comparaison
+            const headers = Object.keys(newJsonData[0] || {});
+            if (headers.length === 0) {
+                return changes;
+            }
+            
+            const newDataFormatted = [headers];
+            
+            newJsonData.forEach(item => {
+                if (item && typeof item === 'object') {
+                    const row = headers.map(header => {
+                        const value = item[header];
+                        // Retourner la valeur telle quelle, même si c'est vide/null/undefined
+                        return value !== undefined ? value : '';
+                    });
+                    newDataFormatted.push(row);
+                }
+            });
+            
+            // Vérification de sécurité pour currentData
+            const safeCurrentData = currentData || [];
+            
+            // Comparer les dimensions
+            const currentRows = safeCurrentData.length;
+            const currentCols = currentRows > 0 ? (safeCurrentData[0] ? safeCurrentData[0].length : 0) : 0;
+            const newRows = newDataFormatted.length;
+            const newCols = headers.length;
+            
+            // Analyser les changements cellule par cellule
+            const maxRows = Math.max(currentRows, newRows);
+            const maxCols = Math.max(currentCols, newCols);
+            
+            for (let row = 0; row < maxRows; row++) {
+                for (let col = 0; col < maxCols; col++) {
+                    const currentValue = (safeCurrentData[row] && safeCurrentData[row][col] !== undefined) ? safeCurrentData[row][col] : '';
+                    const newValue = (newDataFormatted[row] && newDataFormatted[row][col] !== undefined) ? newDataFormatted[row][col] : '';
+                    
+                    // Normaliser les valeurs pour la comparaison (traiter null comme chaîne vide)
+                    const currentNormalized = (currentValue === null || currentValue === undefined) ? '' : String(currentValue);
+                    const newNormalized = (newValue === null || newValue === undefined) ? '' : String(newValue);
+                    
+                    const currentEmpty = currentNormalized === '';
+                    const newEmpty = newNormalized === '';
+                    
+                    if (currentEmpty && !newEmpty) {
+                        changes.newCells++;
+                        changes.details.push({
+                            type: 'new',
+                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
+                            value: newNormalized
+                        });
+                    } else if (!currentEmpty && newEmpty) {
+                        changes.deletedCells++;
+                        changes.details.push({
+                            type: 'deleted',
+                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
+                            oldValue: currentNormalized
+                        });
+                    } else if (!currentEmpty && !newEmpty && currentNormalized !== newNormalized) {
+                        changes.modifiedCells++;
+                        changes.details.push({
+                            type: 'modified',
+                            cell: `${String.fromCharCode(65 + col)}${row + 1}`,
+                            oldValue: currentNormalized,
+                            newValue: newNormalized
+                        });
+                    }
+                }
+            }
+            
+            return changes;
+        }
+
+        function showChangeModal(changes, worksheetName) {
+            const modal = document.getElementById('changeModal');
+            const statsDiv = document.getElementById('changeStats');
+            const detailsDiv = document.getElementById('changeDetails');
+            
+            // Afficher les statistiques
+            statsDiv.innerHTML = `
+                <h4 style="margin: 0 0 10px 0;">Feuille: ${worksheetName}</h4>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="color: #107c10;"><strong>${changes.newCells}</strong> nouvelles cellules</div>
+                    <div style="color: #d13438;"><strong>${changes.deletedCells}</strong> cellules supprimées</div>
+                    <div style="color: #ff8c00;"><strong>${changes.modifiedCells}</strong> cellules modifiées</div>
+                </div>
+            `;
+            
+            // Afficher les détails (limité aux 50 premiers changements)
+            const limitedDetails = changes.details.slice(0, 50);
+            detailsDiv.innerHTML = limitedDetails.map(change => {
+                switch (change.type) {
+                    case 'new':
+                        return `<div style="padding: 5px; border-left: 3px solid #107c10; margin: 5px 0; background: #f6ffed;">
+                            <strong>${change.cell}</strong>: Nouvelle valeur "<em>${change.value}</em>"
+                        </div>`;
+                    case 'deleted':
+                        return `<div style="padding: 5px; border-left: 3px solid #d13438; margin: 5px 0; background: #fff2f0;">
+                            <strong>${change.cell}</strong>: Valeur supprimée "<em>${change.oldValue}</em>"
+                        </div>`;
+                    case 'modified':
+                        return `<div style="padding: 5px; border-left: 3px solid #ff8c00; margin: 5px 0; background: #fff7e6;">
+                            <strong>${change.cell}</strong>: "<em>${change.oldValue}</em>" → "<em>${change.newValue}</em>"
+                        </div>`;
+                    default:
+                        return '';
+                }
+            }).join('');
+            
+            if (changes.details.length > 50) {
+                detailsDiv.innerHTML += `<div style="text-align: center; padding: 10px; color: #605e5c; font-style: italic;">
+                    ... et ${changes.details.length - 50} autres changements
+                </div>`;
+            }
+            
+            if (changes.details.length === 0) {
+                detailsDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #605e5c;">Aucun changement détecté</div>';
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        function closeChangeModal() {
+            document.getElementById('changeModal').style.display = 'none';
+            pendingImportData = null;
+            currentWorksheetData = null;
+        }
+
+        async function confirmImport() {
+            if (!pendingImportData || !Array.isArray(pendingImportData) || pendingImportData.length === 0) {
+                showStatus('Aucune donnée à importer', true);
+                return;
+            }
+            
+            try {
+                await Excel.run(async (context) => {
+                    const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
+                    
+                    // Vérifier si la feuille n'est pas vide pour créer une révision
+                    const usedRange = activeWorksheet.getUsedRange(true);
+                    if (usedRange) {
+                        // La feuille n'est pas vide, effacer le contenu existant
+                        usedRange.clear();
+                    }
+                    
+                    // Préparer les données pour l'insertion
+                    const headers = Object.keys(pendingImportData[0] || {});
+                    if (headers.length === 0) {
+                        throw new Error('Aucun en-tête trouvé dans les données JSON');
+                    }
+                    
+                    const dataToInsert = [headers];
+                    
+                    pendingImportData.forEach(item => {
+                        if (item && typeof item === 'object') {
+                            const row = headers.map(header => {
+                                const value = item[header];
+                                // Préserver les valeurs exactes, y compris les chaînes vides
+                                return value !== undefined ? value : '';
+                            });
+                            dataToInsert.push(row);
+                        }
+                    });
+                    
+                    // Insérer les données
+                    const range = activeWorksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}${dataToInsert.length}`);
+                    range.values = dataToInsert;
+                    
+                    // Formater les en-têtes
+                    const headerRange = activeWorksheet.getRange(`A1:${String.fromCharCode(64 + headers.length)}1`);
+                    headerRange.format.font.bold = true;
+                    headerRange.format.fill.color = "#4472C4";
+                    headerRange.format.font.color = "white";
+                    
+                    // Auto-ajuster les colonnes
+                    range.format.autofitColumns();
+                    
+                    await context.sync();
+                    
+                    closeChangeModal();
+                    showStatus(`Import réussi! ${pendingImportData.length} lignes importées dans la feuille active.`);
+                });
+                
+            } catch (error) {
+                showStatus('Erreur lors de l\'import: ' + error.message, true);
+            }
         }
     </script>
 </body>
