@@ -6,6 +6,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>JSON Export/Import</title>
     
+    <!-- Polyfills pour IE11 -->
+    <script>
+        // Polyfill pour Object.keys
+        if (!Object.keys) {
+            Object.keys = function(obj) {
+                var keys = [];
+                for (var key in obj) {
+                    if (obj.hasOwnProperty(key)) {
+                        keys.push(key);
+                    }
+                }
+                return keys;
+            };
+        }
+        
+        // Polyfill pour Array.forEach
+        if (!Array.prototype.forEach) {
+            Array.prototype.forEach = function(callback, thisArg) {
+                for (var i = 0; i < this.length; i++) {
+                    callback.call(thisArg, this[i], i, this);
+                }
+            };
+        }
+        
+        // Polyfill pour Array.filter
+        if (!Array.prototype.filter) {
+            Array.prototype.filter = function(callback, thisArg) {
+                var result = [];
+                for (var i = 0; i < this.length; i++) {
+                    if (callback.call(thisArg, this[i], i, this)) {
+                        result.push(this[i]);
+                    }
+                }
+                return result;
+            };
+        }
+        
+        // Polyfill pour Array.map
+        if (!Array.prototype.map) {
+            Array.prototype.map = function(callback, thisArg) {
+                var result = [];
+                for (var i = 0; i < this.length; i++) {
+                    result.push(callback.call(thisArg, this[i], i, this));
+                }
+                return result;
+            };
+        }
+        
+        // Polyfill pour Array.some
+        if (!Array.prototype.some) {
+            Array.prototype.some = function(callback, thisArg) {
+                for (var i = 0; i < this.length; i++) {
+                    if (callback.call(thisArg, this[i], i, this)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+        }
+        
+        // Polyfill pour String.fromCharCode amélioré
+        if (!String.fromCharCode.apply) {
+            // Fallback pour les très vieux navigateurs
+        }
+        
+        // Détection du navigateur
+        function isIE11() {
+            return navigator.userAgent.indexOf("Trident") !== -1;
+        }
+        
+        function isEdgeLegacy() {
+            return navigator.userAgent.indexOf("EdgeHTML") !== -1;
+        }
+    </script>
+    
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
     
@@ -18,6 +93,8 @@
             padding: 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f3f2f1;
+            /* Support IE11 */
+            -ms-overflow-style: scrollbar;
         }
         
         .container {
@@ -29,7 +106,8 @@
             border-radius: 4px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 1.6px 3.6px 0 rgba(0,0,0,0.132), 0 0.3px 0.9px 0 rgba(0,0,0,0.108);
+            /* Shadow compatible IE */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
         }
         
         .section-title {
@@ -52,6 +130,9 @@
             cursor: pointer;
             border-radius: 2px;
             width: 100%;
+            /* Transition compatible IE */
+            -ms-transition: background-color 0.3s;
+            -webkit-transition: background-color 0.3s;
             transition: background-color 0.3s;
         }
         
@@ -103,18 +184,104 @@
             color: #d13438;
         }
         
-        .sheet-selector {
-            width: 100%;
-            padding: 8px;
-            margin: 10px 0;
-            border: 1px solid #d2d0ce;
-            border-radius: 2px;
-        }
-        
         .description {
             font-size: 12px;
             color: #605e5c;
             margin-bottom: 10px;
+        }
+        
+        /* Styles pour le modal compatible IE */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            /* Transform compatible IE9+ */
+            -ms-transform: translate(-50%, -50%);
+            -webkit-transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 600px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            display: block; /* Fallback pour IE */
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #323130;
+            display: inline-block;
+        }
+        
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #605e5c;
+            float: right;
+        }
+        
+        .change-stats {
+            background: #f3f2f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .change-details {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #d2d0ce;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        
+        .button-group {
+            margin-top: 20px;
+            text-align: right;
+        }
+        
+        .button-group .button {
+            width: auto;
+            margin-left: 10px;
+        }
+        
+        .change-item {
+            padding: 5px;
+            margin: 5px 0;
+        }
+        
+        .change-new {
+            border-left: 3px solid #107c10;
+            background: #f6ffed;
+        }
+        
+        .change-deleted {
+            border-left: 3px solid #d13438;
+            background: #fff2f0;
+        }
+        
+        .change-modified {
+            border-left: 3px solid #ff8c00;
+            background: #fff7e6;
         }
     </style>
 </head>
@@ -123,9 +290,9 @@
     <div class="container">
         <div class="section">
             <div class="section-title">📤 Exporter vers JSON</div>
-            <div class="description">Converti au format JSON</div>
+            <div class="description">Exporte la première feuille du classeur au format JSON</div>
             <button class="button" id="exportBtn">Convertir le tableau</button>
-            <textarea class="textarea" id="exportResult" placeholder="Le JSON a exporter apparaîtra ici..." readonly></textarea>
+            <textarea class="textarea" id="exportResult" placeholder="Le JSON à exporter apparaîtra ici..." readonly></textarea>
             <button class="button" id="downloadBtn" style="display: none;">Télécharger le fichier JSON</button>
         </div>
 
@@ -139,22 +306,23 @@
         </div>
 
         <!-- Modal d'aperçu des changements -->
-        <div id="changeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; padding: 20px; max-width: 600px; max-height: 80%; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0; color: #323130;">Aperçu des changements</h3>
-                    <button id="closeModal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #605e5c;">×</button>
+        <div id="changeModal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Aperçu des changements</h3>
+                    <button id="closeModal" class="close-button">×</button>
+                    <div style="clear: both;"></div>
                 </div>
                 
-                <div id="changeStats" style="background: #f3f2f1; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                <div id="changeStats" class="change-stats">
                     <!-- Statistiques des changements -->
                 </div>
                 
-                <div id="changeDetails" style="max-height: 300px; overflow-y: auto; border: 1px solid #d2d0ce; border-radius: 4px; padding: 10px;">
+                <div id="changeDetails" class="change-details">
                     <!-- Détails des changements -->
                 </div>
                 
-                <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
+                <div class="button-group">
                     <button id="cancelImport" class="button" style="background-color: #a19f9d;">Annuler</button>
                     <button id="confirmImport" class="button">Importer et remplacer</button>
                 </div>
@@ -165,22 +333,11 @@
     </div>
 
     <script>
-        Office.onReady((info) => {
-            if (info.host === Office.HostType.Excel) {
-                document.getElementById('exportBtn').onclick = exportToJSON;
-                document.getElementById('importBtn').onclick = analyzeChanges;
-                document.getElementById('confirmImport').onclick = confirmImport;
-                document.getElementById('cancelImport').onclick = closeChangeModal;
-                document.getElementById('closeModal').onclick = closeChangeModal;
-                document.getElementById('downloadBtn').onclick = downloadJSON;
-                document.getElementById('fileInput').onchange = handleFileSelect;
-            }
-        });
-
-        let exportedData = null;
-        let pendingImportData = null;
-        let currentWorksheetData = null;
-        let currentWorkbookName = null;
+        // Variables globales
+        var exportedData = null;
+        var pendingImportData = null;
+        var currentWorksheetData = null;
+        var currentWorkbookName = null;
 
         function showStatus(message, isError = false) {
             const statusEl = document.getElementById('statusMessage');
@@ -282,33 +439,37 @@
             
             for (let row = 0; row < maxRows; row++) {
                 for (let col = 0; col < maxCols; col++) {
-                    const currentValue = (currentData[row] && currentData[row][col]) || '';
-                    const newValue = (newDataFormatted[row] && newDataFormatted[row][col]) || '';
+                    const currentValue = (currentData[row] && currentData[row][col] !== undefined) ? currentData[row][col] : '';
+                    const newValue = (newDataFormatted[row] && newDataFormatted[row][col] !== undefined) ? newDataFormatted[row][col] : '';
                     
-                    const currentEmpty = currentValue === null || currentValue === undefined || currentValue === '';
-                    const newEmpty = newValue === null || newValue === undefined || newValue === '';
+                    // Normaliser les valeurs pour la comparaison (traiter null comme chaîne vide)
+                    const currentNormalized = (currentValue === null || currentValue === undefined) ? '' : String(currentValue);
+                    const newNormalized = (newValue === null || newValue === undefined) ? '' : String(newValue);
+                    
+                    const currentEmpty = currentNormalized === '';
+                    const newEmpty = newNormalized === '';
                     
                     if (currentEmpty && !newEmpty) {
                         changes.newCells++;
                         changes.details.push({
                             type: 'new',
                             cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            value: newValue
+                            value: newNormalized
                         });
                     } else if (!currentEmpty && newEmpty) {
                         changes.deletedCells++;
                         changes.details.push({
                             type: 'deleted',
                             cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            oldValue: currentValue
+                            oldValue: currentNormalized
                         });
-                    } else if (!currentEmpty && !newEmpty && currentValue !== newValue) {
+                    } else if (!currentEmpty && !newEmpty && currentNormalized !== newNormalized) {
                         changes.modifiedCells++;
                         changes.details.push({
                             type: 'modified',
                             cell: `${String.fromCharCode(65 + col)}${row + 1}`,
-                            oldValue: currentValue,
-                            newValue: newValue
+                            oldValue: currentNormalized,
+                            newValue: newNormalized
                         });
                     }
                 }
@@ -394,7 +555,11 @@
                     const dataToInsert = [headers];
                     
                     pendingImportData.forEach(item => {
-                        const row = headers.map(header => item[header] || '');
+                        const row = headers.map(header => {
+                            const value = item[header];
+                            // Préserver les valeurs exactes, y compris les chaînes vides
+                            return value !== undefined ? value : '';
+                        });
                         dataToInsert.push(row);
                     });
                     
@@ -520,6 +685,9 @@
                 };
                 reader.readAsText(file);
             }
+            
+            // Réinitialiser l'input file pour permettre de sélectionner le même fichier
+            event.target.value = '';
         }
 
         async function importFromJSON() {
