@@ -123,9 +123,9 @@
     <div class="container">
         <div class="section">
             <div class="section-title">📤 Exporter vers JSON</div>
-            <div class="description">Convertit au format JSON</div>
-            <button class="button" id="exportBtn">Convertir en JSON</button>
-            <textarea class="textarea" id="exportResult" placeholder="Le JSON créé apparaîtra ici..." readonly></textarea>
+            <div class="description">Converti au format JSON</div>
+            <button class="button" id="exportBtn">Convertir le tableau</button>
+            <textarea class="textarea" id="exportResult" placeholder="Le JSON a exporter apparaîtra ici..." readonly></textarea>
             <button class="button" id="downloadBtn" style="display: none;">Télécharger le fichier JSON</button>
         </div>
 
@@ -180,6 +180,7 @@
         let exportedData = null;
         let pendingImportData = null;
         let currentWorksheetData = null;
+        let currentWorkbookName = null;
 
         function showStatus(message, isError = false) {
             const statusEl = document.getElementById('statusMessage');
@@ -426,10 +427,17 @@
                 document.getElementById('exportBtn').disabled = true;
                 
                 await Excel.run(async (context) => {
+                    // Obtenir le nom du classeur
+                    const workbook = context.workbook;
+                    workbook.load("name");
+                    
                     // Obtenir la première feuille
-                    const worksheets = context.workbook.worksheets;
+                    const worksheets = workbook.worksheets;
                     worksheets.load("items");
                     await context.sync();
+                    
+                    // Stocker le nom du classeur
+                    currentWorkbookName = workbook.name;
                     
                     if (worksheets.items.length === 0) {
                         throw new Error('Aucune feuille trouvée dans le classeur');
@@ -485,12 +493,22 @@
             const dataStr = JSON.stringify(exportedData, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
             
-            const exportFileDefaultName = 'excel_export.json';
+            // Utiliser le nom du classeur Excel ou un nom par défaut
+            let fileName = 'excel_export.json';
+            if (currentWorkbookName) {
+                // Nettoyer le nom du fichier (supprimer l'extension .xlsx si présente)
+                let cleanName = currentWorkbookName.replace(/\.(xlsx|xls|xlsm|xlsb)$/i, '');
+                // Remplacer les caractères non autorisés par des underscores
+                cleanName = cleanName.replace(/[<>:"/\\|?*]/g, '_');
+                fileName = cleanName + '.json';
+            }
             
             const linkElement = document.createElement('a');
             linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.setAttribute('download', fileName);
             linkElement.click();
+            
+            showStatus(`Fichier "${fileName}" téléchargé avec succès!`);
         }
 
         function handleFileSelect(event) {
