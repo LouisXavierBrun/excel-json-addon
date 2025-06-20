@@ -21,7 +21,7 @@ Module complémentaire Excel pour exporter et importer des données JSON.
 2. **Dans Excel en ligne :**
    - Ouvrez Excel en ligne (office.com)
    - Créez ou ouvrez un classeur
-   - Allez dans `Insérer` → `Applications` → `Télécharger à partir d'un fichier`
+   - Allez dans `Accueil` → `Complément` → `Autres complément `→ `Mes compléments`→ `Charger mon comlément`
    - Sélectionnez le fichier `manifest.xml` téléchargé
    - Cliquez sur `Insérer`
 
